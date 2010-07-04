@@ -22,7 +22,7 @@ function update_list(msg, file, mapf, collectorf) {
   fs.stat(file, function(err, stats) {
     if (!err) {
       sys.log(msg);
-      collectorf(fs.readFileSync(file)
+      collectorf(fs.readFileSync(file, 'utf-8')
                    .split('\n')
                    .filter(function(rx) { return rx.length })
                    .map(mapf));
@@ -82,9 +82,19 @@ function server_cb(request, response) {
     return;
   }
 
-  sys.log(ip + ": " + request.method + " " + request.url);
-  var proxy = http.createClient(80, request.headers['host'])
-  var proxy_request = proxy.request(request.method, request.url, request.headers);
+  // parse out host, port, URL from request
+  var req_data  = request.url.match(/^(?:f|ht)tp(?:s)?\:\/\/([^/:]+)(:[0-9]+)?(.*)/im);
+  var req_host  = req_data[1].toString();
+  var req_port  = req_data[2] ? req_data[2].toString() : 80;
+  var req_url   = req_data[3].toString();
+
+  if(!request.headers.host) { request.headers['host'] = req_host; }
+
+  sys.log("Getting " + req_url + " from " + req_host + " on port " + req_port + " for client " + ip);
+
+  var proxy = http.createClient(req_port, req_host);
+  var proxy_request = proxy.request(request.method, req_url, request.headers);
+
   proxy_request.addListener('response', function(proxy_response) {
     proxy_response.addListener('data', function(chunk) {
       response.write(chunk, 'binary');
